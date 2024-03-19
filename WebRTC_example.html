@@ -1,0 +1,214 @@
+<html lang="en">
+<head>
+	<meta charset='utf-8'>
+	<meta name='viewport' content='width=device-width,initial-scale=1'>
+	<title>WebRTC Example</title>
+</head>
+
+<script>
+    var page_loaded = false;
+
+    var hostname = "192.168.2.42";
+
+    var wsPath = "ws";
+
+    var wsConn = null;
+    var webrtcPeerConnection = null;
+    var html5VideoElement = null;
+    var ws; // WebSocket for sending frames
+
+    var localTurnRtcConfig = {
+        "iceServers": [
+            {
+                urls: ["stun:" + hostname + ":3478"]
+            }
+        ],
+    };
+
+    var reportError = function(err) {
+        console.error(err);
+    }
+
+    function getWebsocketUrl() {
+        return "ws://" + hostname + "/" + wsPath;
+    }
+
+    function onLocalDescription(desc) {
+        console.log("Set and send local description:\n" + JSON.stringify(desc));
+        webrtcPeerConnection.setLocalDescription(desc).then(function() {
+            wsConn.send(JSON.stringify({ type: "sdp", "data": webrtcPeerConnection.localDescription }));
+        }).catch(reportError);
+    }
+
+    function onIncomingSDP(sdp) {
+        console.log("Incoming SDP:\n" + JSON.stringify(sdp));
+        webrtcPeerConnection.setRemoteDescription(sdp).catch(reportError);
+        console.log("Creating SDP answer");
+        webrtcPeerConnection.createAnswer().then(onLocalDescription).catch(reportError);
+    }
+
+    function onIncomingICE(ice) {
+        var candidate = new RTCIceCandidate(ice);
+        console.log("Incoming ICE candidate:\n" + JSON.stringify(ice));
+        webrtcPeerConnection.addIceCandidate(candidate).catch(reportError);
+    }
+
+
+    function onAddRemoteStream(event) {
+        console.log("Add remote stream");
+        html5VideoElement.srcObject = event.streams[0];
+    }
+
+    function onIceCandidate(event) {
+        if (event.candidate == null)
+            return;
+
+        console.log("Sending ICE candidate:\n" + JSON.stringify(event.candidate));
+        wsConn.send(JSON.stringify({ "type": "ice", "data": event.candidate }));
+    }
+
+    function onServerMessage(event) {
+        // Create WebRTC connection on first server message
+        if (!webrtcPeerConnection) {
+            webrtcPeerConnection = new RTCPeerConnection(localTurnRtcConfig);
+            webrtcPeerConnection.ontrack = onAddRemoteStream;
+            webrtcPeerConnection.onicecandidate = onIceCandidate;
+        }
+
+        // Handle server ICE and SDP messages
+        var msg;
+        try {
+            msg = JSON.parse(event.data);
+        } catch (e) {
+            if (e instanceof SyntaxError) {
+                this.handleIncomingError("Error parsing incoming JSON: " + event.data);
+            } else {
+                this.handleIncomingError("Unknown error parsing response: " + event.data);
+            }
+            return;
+        }
+
+        switch(msg.type) {
+            case "ice": onIncomingICE(msg.data); break;
+            case "sdp": onIncomingSDP(msg.data); break;
+            default: break;
+
+        }
+    };
+
+    function clearConnection() {
+        wsConn.removeEventListener('error', onServerError);
+        wsConn.removeEventListener('message', onServerMessage);
+        wsConn.removeEventListener('close', onServerClose);
+        wsConn = null;
+    }
+
+    function onServerClose(event) {
+        clearConnection();
+        console.log("Close");
+        window.setTimeout(connect, 1000);
+    };
+
+    function onServerError(event) {
+        clearConnection();
+        console.log("Error", event);
+        window.setTimeout(connect, 1000);
+    };
+
+    function connectWebSocketForFrames() {
+        // Connect to the WebSocket server for sending frames
+        ws = new WebSocket('ws://localhost:8080/'); // Update this URL to your frame receiver WebSocket server
+        ws.onopen = function() {
+            console.log('WebSocket connection established for sending frames');
+            setInterval(captureAndSendFrame, 100); // Adjust interval as needed
+        };
+        ws.onerror = function(error) {
+            console.error('WebSocket Error ', error);
+        };
+        ws.onclose = function() {
+            console.log('WebSocket connection closed');
+        };
+    }
+
+    function captureAndSendFrame() {
+        if (html5VideoElement.readyState >= 2) { // Ensure video stream is ready
+            const canvas = document.createElement('canvas');
+            canvas.width = html5VideoElement.videoWidth;
+            canvas.height = html5VideoElement.videoHeight;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(html5VideoElement, 0, 0, canvas.width, canvas.height);
+            const dataURL = canvas.toDataURL('image/jpeg', 0.5); // Compress for faster transmission
+            ws.send(dataURL);
+        }
+    }
+
+    // function connect() {
+    //     html5VideoElement = document.getElementById("stream");
+
+    //     let wsUri = getWebsocketUrl();
+    //     console.log("Establish websocket connection", wsUri);
+    //     wsConn = new WebSocket(wsUri);
+
+    //     wsConn.addEventListener('message', onServerMessage);
+    //     wsConn.addEventListener('error', onServerError);
+    //     wsConn.addEventListener('close', onServerClose);
+    // }
+
+    function connect() {
+        html5VideoElement = document.getElementById("stream");
+        let wsUri = getWebsocketUrl();
+        console.log("Establish websocket connection", wsUri);
+        wsConn = new WebSocket(wsUri);
+        wsConn.addEventListener('message', onServerMessage);
+        wsConn.addEventListener('error', onServerError);
+        wsConn.addEventListener('close', onServerClose);
+        
+        connectWebSocketForFrames(); // Connect to WebSocket for sending frames
+    }
+
+    function load() {
+        page_loaded = true;
+        resize();
+        connect();
+    }
+
+    // window.addEventListener("load", load);
+
+    window.addEventListener("load", function() {
+        connect(); // Initiate connection for WebRTC and frame sending
+    });
+
+    // Compute video size in pixels from browser window size.
+    function resize() {
+        if (!page_loaded) {
+            return;
+        }
+		var window_width_pix = window.innerWidth;
+		var window_height_pix = window.innerHeight;
+		var video_width_pix = window_width_pix - 20;
+		var video_height_pix = window_height_pix - 20;
+
+        var ratio = 0.5525;
+
+        const stream_element = document.getElementById("stream");
+        if (video_width_pix*ratio > video_height_pix) {
+            stream_element.style.height = video_height_pix + "px";
+            stream_element.style.width = video_height_pix/ratio + "px";
+        } else {
+            stream_element.style.height = video_width_pix*ratio + "px";
+            stream_element.style.width = video_width_pix + "px";
+        }
+    }
+
+    // window.addEventListener("resize", resize);
+</script>
+
+<div class="sessions" id="sessions">
+    <div class="session">
+        <center>
+        <video id="stream" autoplay muted playsinline preload="none" class="stream">Your browser does not support video</video>
+        </center>
+    </div>
+</div>
+
+</html>
