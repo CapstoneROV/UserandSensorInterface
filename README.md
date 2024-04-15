@@ -43,3 +43,14 @@ Open a web browser and navigate to the webrtc_example.html file located in the m
 View Sonar Data in RViz:
 
 While the ros.py script is running and publishing data, you should also be able to view this data in RViz under the respective ROS topic configured for sonar data visualization.
+
+To run RealSense Camera, connect to laptop, then run this command:
+roslaunch realsense2_camera rs_camera.launch
+then you should see ros topic being published and can view on rviz
+
+To run the sonar simulation, use the following command:
+
+bash
+
+roslaunch sonar_testing dummy.launch
+
