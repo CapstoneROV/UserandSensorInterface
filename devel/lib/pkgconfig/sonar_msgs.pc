@@ -1,0 +1,8 @@
+prefix=/home/linux/catkin_ws/devel
+
+Name: sonar_msgs
+Description: Description of sonar_msgs
+Version: 0.0.0
+Cflags: -I/home/linux/catkin_ws/devel/include
+Libs: -L${prefix}/lib 
+Requires: message_runtime
