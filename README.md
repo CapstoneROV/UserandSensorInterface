@@ -8,6 +8,7 @@ This repository contains the ROS packages for sonar testing and waypoint navigat
 Before running the commands in this repository, ensure that you have ROS installed along with the necessary dependencies for each package. This guide assumes you are running ROS on Ubuntu.
 
 ## Usage Instructions
+run this in main directory: source devel/setup.sh
 
 ### Sonar Testing
 To run the sonar simulation, use the following command:
