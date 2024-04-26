@@ -1,3 +1,4 @@
+<!doctype html>
 <html lang="en">
 <head>
 	<meta charset='utf-8'>
@@ -120,7 +121,7 @@
         ws = new WebSocket('ws://localhost:8080/'); // Update this URL to your frame receiver WebSocket server
         ws.onopen = function() {
             console.log('WebSocket connection established for sending frames');
-            setInterval(captureAndSendFrame, 100); // Adjust interval as needed
+            // setInterval(captureAndSendFrame, 100) // Adjust interval as needed
         };
         ws.onerror = function(error) {
             console.error('WebSocket Error ', error);
@@ -130,15 +131,21 @@
         };
     }
 
+    let canvas = null;
+    let ctx = null;
+
     function captureAndSendFrame() {
         if (html5VideoElement.readyState >= 2) { // Ensure video stream is ready
-            const canvas = document.createElement('canvas');
-            canvas.width = html5VideoElement.videoWidth;
-            canvas.height = html5VideoElement.videoHeight;
-            const ctx = canvas.getContext('2d');
+            if (!canvas) {
+                canvas = document.createElement('canvas');
+                canvas.width = html5VideoElement.videoWidth / 2;
+                canvas.height = html5VideoElement.videoHeight / 2;
+                ctx = canvas.getContext('2d');
+            }
             ctx.drawImage(html5VideoElement, 0, 0, canvas.width, canvas.height);
-            const dataURL = canvas.toDataURL('image/jpeg', 0.5); // Compress for faster transmission
-            ws.send(dataURL);
+            // Compress for faster transmission
+            // Use blob to reduce base64 overhead
+            canvas.toBlob(blob => {ws.send(blob);}, 'image/jpeg', 0.8);
         }
     }
 
@@ -153,6 +160,13 @@
     //     wsConn.addEventListener('error', onServerError);
     //     wsConn.addEventListener('close', onServerClose);
     // }
+    var currentTime = null;
+    function newFrame() {
+        if (html5VideoElement.currentTime > currentTime) {
+            currentTime = html5VideoElement.currentTime;
+            captureAndSendFrame();
+        }
+    }
 
     function connect() {
         html5VideoElement = document.getElementById("stream");
@@ -164,6 +178,10 @@
         wsConn.addEventListener('close', onServerClose);
         
         connectWebSocketForFrames(); // Connect to WebSocket for sending frames
+
+        // Massive speed up
+        currentTime = html5VideoElement.currentTime;
+        setInterval(newFrame, 50); // Adjust interval as needed
     }
 
     function load() {

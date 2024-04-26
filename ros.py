@@ -106,10 +106,12 @@ bridge = CvBridge()
 
 class ImageWebSocket(WebSocket):
     def handle(self):
-        # Decode the base64 image
-        header, encoded = self.data.split(",", 1)
-        img_data = base64.b64decode(encoded)
-        np_arr = np.frombuffer(img_data, np.uint8)
+        # # Decode the base64 image
+        # header, encoded = self.data.split(",", 1)
+        # img_data = base64.b64decode(encoded)
+        # np_arr = np.frombuffer(img_data, np.uint8)
+        # Convert bytes to a NumPy array (using blob)
+        np_arr = np.frombuffer(self.data, dtype=np.uint8)
         image = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
 
         # Check if ROS is still running
