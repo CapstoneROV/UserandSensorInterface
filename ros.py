@@ -118,6 +118,7 @@ class ImageWebSocket(WebSocket):
         if not rospy.is_shutdown():
             # Convert OpenCV image to ROS Image message and publish
             img_msg = bridge.cv2_to_imgmsg(image, encoding="bgr8")
+            img_msg.header.stamp = rospy.Time.now()
             image_pub.publish(img_msg)
         else:
             rospy.loginfo("ROS is shutdown. Exiting...")
